@@ -5,14 +5,16 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.google.android.material.snackbar.Snackbar
 import com.specknet.pdiotapp.bluetooth.BluetoothSpeckService
@@ -21,7 +23,13 @@ import com.specknet.pdiotapp.live.LiveDataActivity
 import com.specknet.pdiotapp.onboarding.OnBoardingActivity
 import com.specknet.pdiotapp.utils.Constants
 import com.specknet.pdiotapp.utils.Utils
-import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.activity_main.coordinatorLayout
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
@@ -49,6 +57,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+
+
         // check whether the onboarding screen should be shown
         val sharedPreferences = getSharedPreferences(Constants.PREFERENCES_FILE, Context.MODE_PRIVATE)
         if (sharedPreferences.contains(Constants.PREF_USER_FIRST_TIME)) {
@@ -65,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         pairingButton = findViewById(R.id.ble_button)
         recordButton = findViewById(R.id.record_button)
 
+        val flaskTextView: TextView = findViewById(R.id.Flask)
         permissionAlertDialog = AlertDialog.Builder(this)
 
         setupClickListeners()
@@ -72,6 +83,42 @@ class MainActivity : AppCompatActivity() {
         setupPermissions()
 
         setupBluetoothService()
+
+
+        //set up the connection to flask backend
+        val okHttpClient = OkHttpClient()
+        // need to change the http each time it is created, I believe
+        val request: Request = Request.Builder().url("http://172.20.181.148:5000/hello/").build()
+
+        okHttpClient.newCall(request).enqueue(object : Callback {
+            //if failed to connect to server
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    //Toast.makeText(this@MainActivity, "Server down", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "Error connecting to the server", Toast.LENGTH_LONG).show()
+                }
+            }
+
+            //if we are able to get a response from server
+            override fun onResponse(call: Call, response: Response) {
+                //store the code received from server
+                val responseCode = response.code
+
+                runOnUiThread {
+                    val flaskTextView: TextView = findViewById(R.id.Flask)
+                    //if 200, successfully connected
+                    if (responseCode == 200) {
+                        flaskTextView.text = "Connected"
+                    } else {
+                        //most likely code of 404 which is an error
+                        flaskTextView.text = "Not Connected"
+                    }
+                }
+            }
+        })
+
+
+
 
         // register a broadcast receiver for respeck status
         filter.addAction(Constants.ACTION_RESPECK_CONNECTED)
